@@ -1,9 +1,9 @@
 module Structures
 
-export FPNode, FPTree
+export FPNode, FPTree, MiningStats
 
 """
-Node trong FP-tree
+Node trong FP-tree.
 """
 mutable struct FPNode
     item::Union{Int,Nothing}
@@ -18,17 +18,32 @@ mutable struct FPNode
 end
 
 """
-FP-tree
+FP-tree.
 """
 mutable struct FPTree
     root::FPNode
-    header::Dict{Int,FPNode}   # nodeLink head
+    header::Dict{Int,FPNode}
     support::Dict{Int,Int}
 
     function FPTree()
         root = FPNode(nothing, nothing)
         root.count = 0
         new(root, Dict{Int,FPNode}(), Dict{Int,Int}())
+    end
+end
+
+"""
+Statistics during mining.
+"""
+mutable struct MiningStats
+    node_count::Int
+    tree_count::Int
+    projection_count::Int
+    conditional_tree_count::Int
+    runtime_ns::Int
+
+    function MiningStats()
+        new(0, 0, 0, 0, 0)
     end
 end
 
