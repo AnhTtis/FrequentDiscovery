@@ -148,6 +148,9 @@ function mine_tree(tree, prefix, results, minsup, stats::Union{MiningStats,Nothi
         end
 
         push!(results, (new_pattern, support))
+        if stats !== nothing
+            stats.frequent_itemset_count += 1
+        end
 
         cond_base = conditional_pattern_base(tree, item)
         cond_tree = build_cond_tree(cond_base, minsup, stats)
@@ -161,6 +164,7 @@ end
 function run_fpgrowth(transactions, minsup)
     stats = MiningStats()
     results = Vector{Tuple{Vector{Int},Int}}()
+    minsup = max(1, round(Int, minsup * length(transactions)))
 
     elapsed = @elapsed begin
         tree = build_fptree(transactions, minsup, stats)
@@ -171,6 +175,7 @@ function run_fpgrowth(transactions, minsup)
 
     stats.runtime_ns = round(Int, elapsed * 1_000_000_000)
     sort!(results, by = entry -> (length(entry[1]), entry[1]))
+    stats.frequent_itemset_count = length(results)
     return results, stats
 end
 

@@ -63,12 +63,14 @@ end
 function run_projection_fpgrowth(transactions, minsup)
     stats = MiningStats()
     results = Vector{Tuple{Vector{Int},Int}}()
+    minsup = max(1, round(Int, minsup * length(transactions)))
 
     elapsed = @elapsed begin
         global_support, ordered_items, order = frequent_items(transactions, minsup)
 
         for (index, item) in enumerate(ordered_items)
             push!(results, ([item], global_support[item]))
+            stats.frequent_itemset_count += 1
 
             if index == 1
                 continue
@@ -92,7 +94,9 @@ function run_projection_fpgrowth(transactions, minsup)
     end
 
     stats.runtime_ns = round(Int, elapsed * 1_000_000_000)
-    return deduplicate_results(results), stats
+    results = deduplicate_results(results)
+    stats.frequent_itemset_count = length(results)
+    return results, stats
 end
 
 end
