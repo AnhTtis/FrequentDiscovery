@@ -30,13 +30,67 @@ function resolve_algorithm(name::String)
     exit()
 end
 
-function run_algorithm(algorithm_name::String, input_file::String, output_dir::String, minsup::Int)
+function format_minsup_label(minsup::Float64)
+    percent = round(minsup * 100, digits = 2)
+    if isinteger(percent)
+        return "$(Int(percent))%"
+    end
+    return "$(percent)%"
+end
+
+function compare_output_files(algorithm_name::String, input_file::String, output_dir::String, minsup::Float64)
+    canonical_name, _ = resolve_algorithm(algorithm_name)
+    base = stem_name(input_file)
+    minsup_label = format_minsup_label(minsup)
+
+    system_file = joinpath(output_dir, "system_$(base)_$(minsup_label).txt")
+    local_file = joinpath(output_dir, "local_$(canonical_name)_$(base)_$(minsup_label).txt")
+    benchmark_file = joinpath(output_dir, "benchmark_system_$(canonical_name)_$(base)_$(minsup_label).txt")
+
+    if !isfile(system_file)
+        println("System output not found: $system_file")
+        exit()
+    end
+
+    if !isfile(local_file)
+        println("Local output not found: $local_file")
+        exit()
+    end
+
+    system_results = read_output(system_file)
+    local_results = read_output(local_file)
+    patterns_equal = canonical_results(system_results) == canonical_results(local_results)
+
+    write_benchmark_output(
+        benchmark_file,
+        basename(system_file),
+        system_results,
+        basename(local_file),
+        local_results,
+        patterns_equal,
+        input_file,
+        minsup_label,
+    )
+
+    print_benchmark_summary(
+        basename(system_file),
+        system_results,
+        basename(local_file),
+        local_results,
+        patterns_equal,
+        input_file,
+        minsup_label,
+    )
+end
+
+function run_algorithm(algorithm_name::String, input_file::String, output_dir::String, minsup::Float64)
     canonical_name, runner = resolve_algorithm(algorithm_name)
     transactions = read_spmf(input_file)
     results, stats = runner(transactions, minsup)
     base = stem_name(input_file)
+    minsup_label = format_minsup_label(minsup)
 
-    result_path = joinpath(output_dir, "result_$(canonical_name)_$(base)_$(minsup).txt")
+    result_path = joinpath(output_dir, "local_$(canonical_name)_$(base)_$(minsup_label).txt")
 
     write_output(result_path, results)
     print_algorithm_summary(canonical_name, results, stats, input_file, minsup)
@@ -44,7 +98,7 @@ function run_algorithm(algorithm_name::String, input_file::String, output_dir::S
     return canonical_name, results, stats
 end
 
-function compare_algorithms(alg1::String, alg2::String, input_file::String, output_dir::String, minsup::Int)
+function compare_algorithms(alg1::String, alg2::String, input_file::String, output_dir::String, minsup::Float64)
     alg1_name, alg1_results, alg1_stats = run_algorithm(alg1, input_file, output_dir, minsup)
     alg2_name, alg2_results, alg2_stats = run_algorithm(alg2, input_file, output_dir, minsup)
 
@@ -65,4 +119,6 @@ elseif args.mode == "-ca"
     for i in 1:length(algorithms)
         run_algorithm(algorithms[i], args.input_path, args.output_path, args.minsup)
     end
+elseif args.mode == "-b"
+    compare_output_files(args.algorithm, args.input_path, args.output_path, args.minsup)
 end

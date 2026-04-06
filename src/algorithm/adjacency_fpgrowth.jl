@@ -65,6 +65,7 @@ function extend_patterns!(
     adjacency::Dict{Int,Dict{Int,Int}},
     minsup::Int,
     results::Vector{Tuple{Vector{Int},Int}},
+    stats::MiningStats,
 )
     for (index, item) in enumerate(candidates)
         support_tidset = intersect(prefix_tidset, item_tidsets[item])
@@ -76,6 +77,7 @@ function extend_patterns!(
 
         pattern = vcat(prefix, item)
         push!(results, (pattern, support))
+        stats.frequent_itemset_count += 1
 
         remaining = candidates[index + 1:end]
         next_candidates = Int[]
@@ -88,7 +90,7 @@ function extend_patterns!(
         end
 
         if !isempty(next_candidates)
-            extend_patterns!(pattern, support_tidset, next_candidates, item_tidsets, adjacency, minsup, results)
+            extend_patterns!(pattern, support_tidset, next_candidates, item_tidsets, adjacency, minsup, results, stats)
         end
     end
 end
@@ -96,24 +98,27 @@ end
 function run_adjacency_fpgrowth(transactions, minsup)
     stats = MiningStats()
     results = Vector{Tuple{Vector{Int},Int}}()
+    minsup = max(1, round(Int, minsup * length(transactions)))
 
     elapsed = @elapsed begin
         support, item_tidsets, adjacency = build_adjacency_index(transactions, minsup, stats)
 
         for item in sort(collect(keys(support)))
             push!(results, ([item], support[item]))
+            stats.frequent_itemset_count += 1
 
             neighbors = get(adjacency, item, Dict{Int,Int}())
             candidates = sort([neighbor for neighbor in keys(neighbors) if neighbor > item])
 
             if !isempty(candidates)
-                extend_patterns!([item], item_tidsets[item], candidates, item_tidsets, adjacency, minsup, results)
+                extend_patterns!([item], item_tidsets[item], candidates, item_tidsets, adjacency, minsup, results, stats)
             end
         end
     end
 
     stats.runtime_ns = round(Int, elapsed * 1_000_000_000)
     sort!(results, by = entry -> (length(entry[1]), entry[1]))
+    stats.frequent_itemset_count = length(results)
     return results, stats
 end
 
