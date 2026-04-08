@@ -1,10 +1,12 @@
 include("algorithm/structures.jl")
+include("algorithm/memory_tracking.jl")
 include("algorithm/utils.jl")
 include("algorithm/fpgrowth.jl")
 include("algorithm/projection_fpgrowth.jl")
 include("algorithm/adjacency_fpgrowth.jl")
 
 using .Structures
+using .MemoryTracking
 using .Utils
 using .FPGrowth
 using .ProjectionFPGrowth

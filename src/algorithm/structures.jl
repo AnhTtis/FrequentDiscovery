@@ -42,9 +42,10 @@ mutable struct MiningStats
     projection_count::Int
     conditional_tree_count::Int
     runtime_ns::Int
+    peak_working_set_bytes::Int
 
     function MiningStats()
-        new(0, 0, 0, 0, 0, 0)
+        new(0, 0, 0, 0, 0, 0, 0)
     end
 end
 

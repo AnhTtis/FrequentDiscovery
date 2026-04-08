@@ -2,6 +2,10 @@ module Utils
 
 export ensure_output_dir, list_input_files, parse_cli_args, read_spmf, read_output, stem_name, write_benchmark_output, write_output, print_algorithm_summary, print_benchmark_summary
 
+function format_memory_mb(bytes::Int)
+    return round(bytes / 1024^2, digits = 2)
+end
+
 """
 Read SPMF-style transaction data and remove duplicates inside each transaction.
 """
@@ -160,6 +164,11 @@ function print_algorithm_summary(algorithm_name::String, results, stats, input_f
     println("Trees: $(stats.tree_count)")
     println("Conditional trees: $(stats.conditional_tree_count)")
     println("Projections: $(stats.projection_count)")
+    if stats.peak_working_set_bytes > 0
+        println("Peak RAM (MB): $(format_memory_mb(stats.peak_working_set_bytes))")
+    else
+        println("Peak RAM (MB): n/a")
+    end
     println("Minimum support: $minsup")
     println(repeat("=", 40))
 end
