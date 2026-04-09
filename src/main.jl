@@ -10,6 +10,19 @@ using .FPGrowth
 using .ProjectionFPGrowth
 using .AdjacencyFPGrowth
 
+function script_path()
+    return abspath(@__FILE__)
+end
+
+function project_root()
+    return normpath(joinpath(@__DIR__, ".."))
+end
+
+function spawn_algorithm_process(algorithm_name::String, input_file::String, output_dir::String, minsup::Float64)
+    cmd = `$(Base.julia_cmd()) --project=$(project_root()) $(script_path()) -a $algorithm_name $input_file $output_dir $(string(minsup))`
+    run(cmd)
+end
+
 function canonical_results(results)
     Dict(Tuple(sort(items)) => support for (items, support) in results)
 end
@@ -91,17 +104,25 @@ function run_algorithm(algorithm_name::String, input_file::String, output_dir::S
     minsup_label = format_minsup_label(minsup)
 
     result_path = joinpath(output_dir, "local_$(canonical_name)_$(base)_$(minsup_label).txt")
+    stats_path = stats_output_path(output_dir, canonical_name, input_file, minsup)
 
     write_output(result_path, results)
+    write_stats_output(stats_path, canonical_name, stats, input_file, minsup)
     print_algorithm_summary(canonical_name, results, stats, input_file, minsup)
 
     return canonical_name, results, stats
 end
 
 function compare_algorithms(alg1::String, alg2::String, input_file::String, output_dir::String, minsup::Float64)
-    alg1_name, alg1_results, alg1_stats = run_algorithm(alg1, input_file, output_dir, minsup)
-    alg2_name, alg2_results, alg2_stats = run_algorithm(alg2, input_file, output_dir, minsup)
+    canonical_alg1, _ = resolve_algorithm(alg1)
+    canonical_alg2, _ = resolve_algorithm(alg2)
 
+    spawn_algorithm_process(canonical_alg1, input_file, output_dir, minsup)
+    spawn_algorithm_process(canonical_alg2, input_file, output_dir, minsup)
+
+    stats1 = read_stats_output(stats_output_path(output_dir, canonical_alg1, input_file, minsup))
+   stats2 = read_stats_output(stats_output_path(output_dir, canonical_alg2, input_file, minsup))
+    print_comparison_summary(stats1, stats2)
 end
 
 args = parse_cli_args(ARGS)
@@ -117,7 +138,7 @@ elseif args.mode == "-ca"
     algorithms = ["classic", "projection", "adjacency"]
 
     for i in 1:length(algorithms)
-        run_algorithm(algorithms[i], args.input_path, args.output_path, args.minsup)
+        spawn_algorithm_process(algorithms[i], args.input_path, args.output_path, args.minsup)
     end
 elseif args.mode == "-b"
     compare_output_files(args.algorithm, args.input_path, args.output_path, args.minsup)

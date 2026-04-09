@@ -1,6 +1,7 @@
 module ProjectionFPGrowth
 
 using ..Structures
+using ..Utils: reset_memory_tracking!, sample_memory!
 using ..FPGrowth: build_fptree, mine_tree
 
 export run_projection_fpgrowth, frequent_items, build_projection_database
@@ -28,10 +29,15 @@ function normalize_transaction(transaction, order)
 end
 
 function build_projection_database(transactions, target_item, order)
+    build_projection_database(transactions, target_item, order, nothing)
+end
+
+function build_projection_database(transactions, target_item, order, stats::Union{MiningStats,Nothing})
+    sample_memory!(stats)
     projection = Vector{Vector{Int}}()
     target_rank = order[target_item]
 
-    for transaction in transactions
+    for (index, transaction) in enumerate(transactions)
         if !(target_item in transaction)
             continue
         end
@@ -42,8 +48,13 @@ function build_projection_database(transactions, target_item, order)
         if !isempty(prefix)
             push!(projection, prefix)
         end
+
+        if stats !== nothing && index % 256 == 0
+            sample_memory!(stats)
+        end
     end
 
+    sample_memory!(stats)
     return projection
 end
 
@@ -63,10 +74,14 @@ end
 function run_projection_fpgrowth(transactions, minsup)
     stats = MiningStats()
     results = Vector{Tuple{Vector{Int},Int}}()
+    stats.transaction_count = length(transactions)
     minsup = max(1, round(Int, minsup * length(transactions)))
+    reset_memory_tracking!(stats)
 
     elapsed = @elapsed begin
+        sample_memory!(stats)
         global_support, ordered_items, order = frequent_items(transactions, minsup)
+        sample_memory!(stats)
 
         for (index, item) in enumerate(ordered_items)
             push!(results, ([item], global_support[item]))
@@ -76,7 +91,7 @@ function run_projection_fpgrowth(transactions, minsup)
                 continue
             end
 
-            projection_db = build_projection_database(transactions, item, order)
+            projection_db = build_projection_database(transactions, item, order, stats)
             stats.projection_count += 1
 
             if isempty(projection_db)
@@ -90,10 +105,13 @@ function run_projection_fpgrowth(transactions, minsup)
 
             stats.conditional_tree_count += 1
             mine_tree(tree, [item], results, minsup, stats)
+            sample_memory!(stats)
         end
+
+        sample_memory!(stats)
     end
 
-    stats.runtime_ns = round(Int, elapsed * 1_000_000_000)
+    stats.runtime_ns = round(Int64, elapsed * 1_000_000_000)
     results = deduplicate_results(results)
     stats.frequent_itemset_count = length(results)
     return results, stats

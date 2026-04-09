@@ -1,6 +1,7 @@
 module AdjacencyFPGrowth
 
 using ..Structures
+using ..Utils: reset_memory_tracking!, sample_memory!
 
 export run_adjacency_fpgrowth
 
@@ -10,6 +11,7 @@ function add_edge!(adjacency::Dict{Int,Dict{Int,Int}}, left::Int, right::Int)
 end
 
 function build_adjacency_index(transactions, minsup, stats::MiningStats)
+    sample_memory!(stats)
     item_support = Dict{Int,Int}()
     item_tidsets = Dict{Int,BitSet}()
     adjacency = Dict{Int,Dict{Int,Int}}()
@@ -31,6 +33,10 @@ function build_adjacency_index(transactions, minsup, stats::MiningStats)
                     add_edge!(adjacency, right, left)
                 end
             end
+        end
+
+        if tid % 128 == 0
+            sample_memory!(stats)
         end
     end
 
@@ -54,6 +60,7 @@ function build_adjacency_index(transactions, minsup, stats::MiningStats)
         stats.node_count += length(kept)
     end
 
+    sample_memory!(stats)
     return frequent_support, filtered_tidsets, filtered_adjacency
 end
 
@@ -67,6 +74,7 @@ function extend_patterns!(
     results::Vector{Tuple{Vector{Int},Int}},
     stats::MiningStats,
 )
+    sample_memory!(stats)
     for (index, item) in enumerate(candidates)
         support_tidset = intersect(prefix_tidset, item_tidsets[item])
         support = length(support_tidset)
@@ -92,15 +100,22 @@ function extend_patterns!(
         if !isempty(next_candidates)
             extend_patterns!(pattern, support_tidset, next_candidates, item_tidsets, adjacency, minsup, results, stats)
         end
+
+        if index % 32 == 0
+            sample_memory!(stats)
+        end
     end
 end
 
 function run_adjacency_fpgrowth(transactions, minsup)
     stats = MiningStats()
     results = Vector{Tuple{Vector{Int},Int}}()
+    stats.transaction_count = length(transactions)
     minsup = max(1, round(Int, minsup * length(transactions)))
+    reset_memory_tracking!(stats)
 
     elapsed = @elapsed begin
+        sample_memory!(stats)
         support, item_tidsets, adjacency = build_adjacency_index(transactions, minsup, stats)
 
         for item in sort(collect(keys(support)))
@@ -113,10 +128,14 @@ function run_adjacency_fpgrowth(transactions, minsup)
             if !isempty(candidates)
                 extend_patterns!([item], item_tidsets[item], candidates, item_tidsets, adjacency, minsup, results, stats)
             end
+
+            sample_memory!(stats)
         end
+
+        sample_memory!(stats)
     end
 
-    stats.runtime_ns = round(Int, elapsed * 1_000_000_000)
+    stats.runtime_ns = round(Int64, elapsed * 1_000_000_000)
     sort!(results, by = entry -> (length(entry[1]), entry[1]))
     stats.frequent_itemset_count = length(results)
     return results, stats
