@@ -4,6 +4,8 @@ include("algorithm/utils.jl")
 include("algorithm/fpgrowth.jl")
 include("algorithm/projection_fpgrowth.jl")
 include("algorithm/adjacency_fpgrowth.jl")
+include("experiment/split_retail_subsets.jl")
+include("experiment/exp_transaction_length.jl")
 
 using .Structures
 using .MemoryTracking
@@ -11,6 +13,8 @@ using .Utils
 using .FPGrowth
 using .ProjectionFPGrowth
 using .AdjacencyFPGrowth
+using .RetailSubsetSplitter: split_database_subsets
+using .TransactionLengthExperiment: generate_transaction_length_datasets
 
 function script_path()
     return abspath(@__FILE__)
@@ -144,4 +148,13 @@ elseif args.mode == "-ca"
     end
 elseif args.mode == "-b"
     compare_output_files(args.algorithm, args.input_path, args.output_path, args.minsup)
+elseif args.mode == "-s"
+    split_database_subsets(args.input_path, args.output_path, args.ratios, args.seed, args.sampling)
+elseif args.mode == "-tl"
+    generate_transaction_length_datasets(
+        args.output_path,
+        args.transaction_count,
+        args.item_count,
+        args.transaction_lengths,
+    )
 end

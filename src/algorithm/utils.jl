@@ -4,6 +4,13 @@ using ..Structures: MiningStats
 
 export ensure_output_dir, list_input_files, parse_cli_args, read_spmf, read_output, read_stats_output, stem_name, stats_output_path, write_benchmark_output, write_output, write_stats_output, print_algorithm_summary, print_benchmark_summary, print_comparison_summary, reset_memory_tracking!, sample_memory!, memory_tracking_supported
 
+const DEFAULT_SUBSET_RATIOS = [0.10, 0.25, 0.50, 0.75, 1.00]
+const DEFAULT_SUBSET_SEED = 2026
+const DEFAULT_SUBSET_SAMPLING = "independent"
+const DEFAULT_TRANSACTION_LENGTH_COUNT = 1000
+const DEFAULT_TRANSACTION_LENGTH_ITEMS = 100
+const DEFAULT_TRANSACTION_LENGTHS = [5, 10, 20, 30, 50]
+
 function format_memory(bytes::Integer)
     units = ["bytes", "KB", "MB", "GB", "TB"]
     value = Float64(bytes)
@@ -155,6 +162,32 @@ function stats_output_path(output_dir::String, algorithm_name::String, input_fil
     return joinpath(output_dir, "stats_$(algorithm_name)_$(base)_$(minsup_label).txt")
 end
 
+function parse_subset_ratios(text::String)
+    ratios = parse.(Float64, split(text, ","))
+    isempty(ratios) && error("Subset ratios must not be empty.")
+
+    for ratio in ratios
+        if ratio <= 0 || ratio > 1
+            error("Invalid subset ratio $ratio. Ratios must be in (0, 1].")
+        end
+    end
+
+    return ratios
+end
+
+function parse_transaction_lengths(text::String)
+    lengths = parse.(Int, split(text, ","))
+    isempty(lengths) && error("Transaction lengths must not be empty.")
+
+    for length_value in lengths
+        if length_value <= 0
+            error("Invalid transaction length $length_value. Lengths must be positive.")
+        end
+    end
+
+    return lengths
+end
+
 function parse_cli_args(args)
     if isempty(args)
         println("Usage:")
@@ -163,6 +196,8 @@ function parse_cli_args(args)
         println("  julia main.jl -c <alg1> <alg2> <input_file> <output_folder> <minsup>")
         println("  julia main.jl -ca <input_file> <output_folder> <minsup>")
         println("  julia main.jl -b <algorithm> <input_file> <output_folder> <minsup>")
+        println("  julia main.jl -s <input_file> <output_folder> [ratios] [seed] [sampling]")
+        println("  julia main.jl -tl <output_folder> [num_transactions] [num_items] [lengths]")
         exit()
     end
 
@@ -176,6 +211,45 @@ function parse_cli_args(args)
         return (mode = mode, input_path = args[2], output_path = args[3], minsup = parse(Float64, args[4]))
     elseif mode == "-b" && length(args) == 5
         return (mode = mode, algorithm = args[2], input_path = args[3], output_path = args[4], minsup = parse(Float64, args[5]))
+    elseif mode == "-s" && 3 <= length(args) <= 6
+        ratios = length(args) >= 4 ? parse_subset_ratios(args[4]) : DEFAULT_SUBSET_RATIOS
+        seed = length(args) >= 5 ? parse(Int, args[5]) : DEFAULT_SUBSET_SEED
+        sampling = length(args) >= 6 ? lowercase(args[6]) : DEFAULT_SUBSET_SAMPLING
+
+        if !(sampling in ("independent", "prefix"))
+            println("Invalid sampling mode: $sampling")
+            println("Available sampling modes: independent, prefix")
+            exit()
+        end
+
+        return (mode = mode, input_path = args[2], output_path = args[3], ratios = ratios, seed = seed, sampling = sampling)
+    elseif mode == "-tl" && 2 <= length(args) <= 5
+        transaction_count = length(args) >= 3 ? parse(Int, args[3]) : DEFAULT_TRANSACTION_LENGTH_COUNT
+        item_count = length(args) >= 4 ? parse(Int, args[4]) : DEFAULT_TRANSACTION_LENGTH_ITEMS
+        lengths = length(args) >= 5 ? parse_transaction_lengths(args[5]) : DEFAULT_TRANSACTION_LENGTHS
+
+        if transaction_count <= 0
+            println("Invalid number of transactions: $transaction_count")
+            exit()
+        end
+
+        if item_count <= 0
+            println("Invalid number of items: $item_count")
+            exit()
+        end
+
+        if maximum(lengths) > item_count
+            println("Maximum transaction length must be <= number of items.")
+            exit()
+        end
+
+        return (
+            mode = mode,
+            output_path = args[2],
+            transaction_count = transaction_count,
+            item_count = item_count,
+            transaction_lengths = lengths,
+        )
     end
 
     println("Invalid arguments.")
@@ -184,6 +258,8 @@ function parse_cli_args(args)
     println("  julia main.jl -c <alg1> <alg2> <input_file> <output_folder> <minsup>")
     println("  julia main.jl -ca <input_file> <output_folder> <minsup>")
     println("  julia main.jl -b <algorithm> <input_file> <output_folder> <minsup>")
+    println("  julia main.jl -s <input_file> <output_folder> [ratios] [seed] [sampling]")
+    println("  julia main.jl -tl <output_folder> [num_transactions] [num_items] [lengths]")
     exit()
 end
 
