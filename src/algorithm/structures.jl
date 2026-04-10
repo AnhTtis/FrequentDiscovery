@@ -36,16 +36,18 @@ end
 Statistics during mining.
 """
 mutable struct MiningStats
+    transaction_count::Int
     frequent_itemset_count::Int
     node_count::Int
     tree_count::Int
     projection_count::Int
     conditional_tree_count::Int
-    runtime_ns::Int
-    peak_working_set_bytes::Int
+    runtime_ns::Int64
+    memory_baseline_bytes::Int64
+    peak_working_set_bytes::Int64
 
     function MiningStats()
-        new(0, 0, 0, 0, 0, 0, 0)
+        new(0, 0, 0, 0, 0, 0, 0, 0, 0)
     end
 end
 

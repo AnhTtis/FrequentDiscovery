@@ -1,7 +1,7 @@
 module FPGrowth
 
 using ..Structures
-using ..MemoryTracking: reset_memory_tracking!, sample_memory!
+using ..Utils: reset_memory_tracking!, sample_memory!
 
 export build_fptree, mine_tree, run_fpgrowth
 
@@ -187,6 +187,7 @@ end
 function run_fpgrowth(transactions, minsup)
     stats = MiningStats()
     results = Vector{Tuple{Vector{Int},Int}}()
+    stats.transaction_count = length(transactions)
     minsup = max(1, round(Int, minsup * length(transactions)))
     reset_memory_tracking!(stats)
 
@@ -199,7 +200,7 @@ function run_fpgrowth(transactions, minsup)
         sample_memory!(stats)
     end
 
-    stats.runtime_ns = round(Int, elapsed * 1_000_000_000)
+    stats.runtime_ns = round(Int64, elapsed * 1_000_000_000)
     sort!(results, by = entry -> (length(entry[1]), entry[1]))
     stats.frequent_itemset_count = length(results)
     return results, stats
