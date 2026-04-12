@@ -9,6 +9,7 @@ const DEFAULT_SUBSET_SEED = 2026
 const DEFAULT_SUBSET_SAMPLING = "independent"
 const DEFAULT_TRANSACTION_LENGTH_COUNT = 1000
 const DEFAULT_TRANSACTION_LENGTH_ITEMS = 100
+const DEFAULT_TRANSACTION_ITEM_RANGE = 1:DEFAULT_TRANSACTION_LENGTH_ITEMS
 const DEFAULT_TRANSACTION_LENGTHS = [5, 10, 20, 30, 50]
 
 function format_memory(bytes::Integer)
@@ -188,6 +189,26 @@ function parse_transaction_lengths(text::String)
     return lengths
 end
 
+function parse_transaction_item_range(text::String)
+    if occursin(":", text)
+        bounds = split(text, ":", limit = 2)
+        length(bounds) == 2 || error("Invalid item range: $text. Use start:end.")
+
+        start_item = parse(Int, strip(bounds[1]))
+        end_item = parse(Int, strip(bounds[2]))
+
+        if start_item > end_item
+            error("Invalid item range: $text. Start must be <= end.")
+        end
+
+        return start_item:end_item
+    end
+
+    item_count = parse(Int, text)
+    item_count > 0 || error("Invalid number of items: $item_count")
+    return 1:item_count
+end
+
 function parse_cli_args(args)
     if isempty(args)
         println("Usage:")
@@ -197,7 +218,7 @@ function parse_cli_args(args)
         println("  julia main.jl -ca <input_file> <output_folder> <minsup>")
         println("  julia main.jl -b <algorithm> <input_file> <output_folder> <minsup>")
         println("  julia main.jl -s <input_file> <output_folder> [ratios] [seed] [sampling]")
-        println("  julia main.jl -tl <output_folder> [num_transactions] [num_items] [lengths]")
+        println("  julia main.jl -tl <output_folder> [num_transactions] [num_items_or_range] [lengths]")
         exit()
     end
 
@@ -225,7 +246,7 @@ function parse_cli_args(args)
         return (mode = mode, input_path = args[2], output_path = args[3], ratios = ratios, seed = seed, sampling = sampling)
     elseif mode == "-tl" && 2 <= length(args) <= 5
         transaction_count = length(args) >= 3 ? parse(Int, args[3]) : DEFAULT_TRANSACTION_LENGTH_COUNT
-        item_count = length(args) >= 4 ? parse(Int, args[4]) : DEFAULT_TRANSACTION_LENGTH_ITEMS
+        item_range = length(args) >= 4 ? parse_transaction_item_range(args[4]) : DEFAULT_TRANSACTION_ITEM_RANGE
         lengths = length(args) >= 5 ? parse_transaction_lengths(args[5]) : DEFAULT_TRANSACTION_LENGTHS
 
         if transaction_count <= 0
@@ -233,13 +254,8 @@ function parse_cli_args(args)
             exit()
         end
 
-        if item_count <= 0
-            println("Invalid number of items: $item_count")
-            exit()
-        end
-
-        if maximum(lengths) > item_count
-            println("Maximum transaction length must be <= number of items.")
+        if maximum(lengths) > length(item_range)
+            println("Maximum transaction length $(maximum(lengths)) exceeds available items $(length(item_range)) in range $(first(item_range)):$(last(item_range)).")
             exit()
         end
 
@@ -247,7 +263,7 @@ function parse_cli_args(args)
             mode = mode,
             output_path = args[2],
             transaction_count = transaction_count,
-            item_count = item_count,
+            transaction_item_range = item_range,
             transaction_lengths = lengths,
         )
     end
@@ -259,7 +275,7 @@ function parse_cli_args(args)
     println("  julia main.jl -ca <input_file> <output_folder> <minsup>")
     println("  julia main.jl -b <algorithm> <input_file> <output_folder> <minsup>")
     println("  julia main.jl -s <input_file> <output_folder> [ratios] [seed] [sampling]")
-    println("  julia main.jl -tl <output_folder> [num_transactions] [num_items] [lengths]")
+    println("  julia main.jl -tl <output_folder> [num_transactions] [num_items_or_range] [lengths]")
     exit()
 end
 

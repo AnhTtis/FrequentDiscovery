@@ -154,7 +154,7 @@ elseif args.mode == "-tl"
     generate_transaction_length_datasets(
         args.output_path,
         args.transaction_count,
-        args.item_count,
+        args.transaction_item_range,
         args.transaction_lengths,
     )
 end
