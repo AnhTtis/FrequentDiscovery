@@ -9,20 +9,22 @@ const DEFAULT_TRANSACTION_COUNT = 1000
 const DEFAULT_ITEM_COUNT = 100
 const DEFAULT_ITEM_RANGE = 1:DEFAULT_ITEM_COUNT
 const DEFAULT_TRANSACTION_LENGTHS = [5, 10, 20, 30, 50]
+const DEFAULT_RANDOM_SEED = 2026
 
 function print_usage()
     println("Usage:")
-    println("  julia src/experiment/exp_transaction_length.jl [output_dir] [num_transactions] [num_items_or_range] [lengths]")
+    println("  julia src/experiment/exp_transaction_length.jl [output_dir] [num_transactions] [num_items_or_range] [lengths] [seed]")
     println("")
     println("Defaults:")
     println("  output_dir       : $DEFAULT_OUTPUT_DIR")
     println("  num_transactions : $DEFAULT_TRANSACTION_COUNT")
     println("  num_items/range  : 1:$DEFAULT_ITEM_COUNT")
     println("  lengths          : 5,10,20,30,50")
+    println("  seed             : $DEFAULT_RANDOM_SEED")
     println("")
     println("Example:")
-    println("  julia src/experiment/exp_transaction_length.jl src/experiment/transaction_length 1000 100 5,10,20,30,50")
-    println("  julia src/experiment/exp_transaction_length.jl src/experiment/transaction_length 1000 50:200 5,10,20,30,50")
+    println("  julia src/experiment/exp_transaction_length.jl src/experiment/transaction_length 1000 100 5,10,20,30,50 2026")
+    println("  julia src/experiment/exp_transaction_length.jl src/experiment/transaction_length 1000 50:200 5,10,20,30,50 2026")
 end
 
 function parse_lengths(text::String)
@@ -68,7 +70,7 @@ function parse_cli_args(args)
         exit()
     end
 
-    if length(args) > 4
+    if length(args) > 5
         print_usage()
         error("Too many arguments.")
     end
@@ -77,6 +79,7 @@ function parse_cli_args(args)
     num_transactions = length(args) >= 2 ? parse(Int, args[2]) : DEFAULT_TRANSACTION_COUNT
     item_range = length(args) >= 3 ? parse_item_range(args[3]) : DEFAULT_ITEM_RANGE
     lengths = length(args) >= 4 ? parse_lengths(args[4]) : DEFAULT_TRANSACTION_LENGTHS
+    seed = length(args) >= 5 ? parse(Int, args[5]) : DEFAULT_RANDOM_SEED
 
     if num_transactions <= 0
         error("Number of transactions must be positive.")
@@ -91,6 +94,7 @@ function parse_cli_args(args)
         num_transactions = num_transactions,
         item_range = item_range,
         lengths = lengths,
+        seed = seed,
     )
 end
 
@@ -99,8 +103,7 @@ function random_transaction(rng, item_values::Vector{Int}, transaction_len::Int)
     return item_values[selected_indices]
 end
 
-function generate_dataset(path::String, num_transactions::Int, item_range::UnitRange{Int}, transaction_len::Int)
-    rng = Random.default_rng()
+function generate_dataset(rng::AbstractRNG, path::String, num_transactions::Int, item_range::UnitRange{Int}, transaction_len::Int)
     item_values = collect(item_range)
 
     open(path, "w") do io
@@ -116,6 +119,7 @@ function generate_transaction_length_datasets(
     num_transactions::Int = DEFAULT_TRANSACTION_COUNT,
     item_range::UnitRange{Int} = DEFAULT_ITEM_RANGE,
     lengths::Vector{Int} = DEFAULT_TRANSACTION_LENGTHS,
+    seed::Int = DEFAULT_RANDOM_SEED,
 )
     if num_transactions <= 0
         error("Number of transactions must be positive.")
@@ -130,16 +134,18 @@ function generate_transaction_length_datasets(
     end
 
     mkpath(output_dir)
+    rng = MersenneTwister(seed)
 
     println("Output directory: $output_dir")
     println("Transactions per dataset: $num_transactions")
     println("Item range: $(format_item_range(item_range))")
     println("Available items: $(length(item_range))")
     println("Transaction lengths: $(join(lengths, ","))")
+    println("Random seed: $seed")
 
     for transaction_len in lengths
         output_file = joinpath(output_dir, "data_L$(transaction_len).txt")
-        generate_dataset(output_file, num_transactions, item_range, transaction_len)
+        generate_dataset(rng, output_file, num_transactions, item_range, transaction_len)
         println("Created $(basename(output_file)) with transaction length $transaction_len")
     end
 end
@@ -151,6 +157,7 @@ function run_transaction_length_cli(args = ARGS)
         config.num_transactions,
         config.item_range,
         config.lengths,
+        config.seed,
     )
 end
 
