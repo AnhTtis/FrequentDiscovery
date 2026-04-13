@@ -13,7 +13,7 @@ const DEFAULT_RANDOM_SEED = 2026
 
 function print_usage()
     println("Usage:")
-    println("  julia src/experiment/exp_transaction_length.jl [output_dir] [num_transactions] [num_items_or_range] [lengths] [seed]")
+    println("  julia src/experiment/exp_transaction_length.jl [output_dir] [num_transactions] [num_items_or_range] [lengths]")
     println("")
     println("Defaults:")
     println("  output_dir       : $DEFAULT_OUTPUT_DIR")
@@ -23,8 +23,8 @@ function print_usage()
     println("  seed             : $DEFAULT_RANDOM_SEED")
     println("")
     println("Example:")
-    println("  julia src/experiment/exp_transaction_length.jl src/experiment/transaction_length 1000 100 5,10,20,30,50 2026")
-    println("  julia src/experiment/exp_transaction_length.jl src/experiment/transaction_length 1000 50:200 5,10,20,30,50 2026")
+    println("  julia src/experiment/exp_transaction_length.jl src/experiment/transaction_length 1000 100 5,10,20,30,50")
+    println("  julia src/experiment/exp_transaction_length.jl src/experiment/transaction_length 1000 50:200 5,10,20,30,50")
 end
 
 function parse_lengths(text::String)
@@ -70,7 +70,7 @@ function parse_cli_args(args)
         exit()
     end
 
-    if length(args) > 5
+    if length(args) > 4
         print_usage()
         error("Too many arguments.")
     end
@@ -79,7 +79,6 @@ function parse_cli_args(args)
     num_transactions = length(args) >= 2 ? parse(Int, args[2]) : DEFAULT_TRANSACTION_COUNT
     item_range = length(args) >= 3 ? parse_item_range(args[3]) : DEFAULT_ITEM_RANGE
     lengths = length(args) >= 4 ? parse_lengths(args[4]) : DEFAULT_TRANSACTION_LENGTHS
-    seed = length(args) >= 5 ? parse(Int, args[5]) : DEFAULT_RANDOM_SEED
 
     if num_transactions <= 0
         error("Number of transactions must be positive.")
@@ -94,7 +93,6 @@ function parse_cli_args(args)
         num_transactions = num_transactions,
         item_range = item_range,
         lengths = lengths,
-        seed = seed,
     )
 end
 
@@ -119,7 +117,6 @@ function generate_transaction_length_datasets(
     num_transactions::Int = DEFAULT_TRANSACTION_COUNT,
     item_range::UnitRange{Int} = DEFAULT_ITEM_RANGE,
     lengths::Vector{Int} = DEFAULT_TRANSACTION_LENGTHS,
-    seed::Int = DEFAULT_RANDOM_SEED,
 )
     if num_transactions <= 0
         error("Number of transactions must be positive.")
@@ -134,14 +131,14 @@ function generate_transaction_length_datasets(
     end
 
     mkpath(output_dir)
-    rng = MersenneTwister(seed)
+    rng = MersenneTwister(DEFAULT_RANDOM_SEED)
 
     println("Output directory: $output_dir")
     println("Transactions per dataset: $num_transactions")
     println("Item range: $(format_item_range(item_range))")
     println("Available items: $(length(item_range))")
     println("Transaction lengths: $(join(lengths, ","))")
-    println("Random seed: $seed")
+    println("Random seed: $DEFAULT_RANDOM_SEED")
 
     for transaction_len in lengths
         output_file = joinpath(output_dir, "data_L$(transaction_len).txt")
@@ -157,7 +154,6 @@ function run_transaction_length_cli(args = ARGS)
         config.num_transactions,
         config.item_range,
         config.lengths,
-        config.seed,
     )
 end
 
