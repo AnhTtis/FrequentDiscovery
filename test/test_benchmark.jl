@@ -1,37 +1,44 @@
 using .Utils
+using .FPGrowth
+using .ProjectionFPGrowth
+using .AdjacencyFPGrowth
 
-@testset "CLI output-file comparison" begin
+function outputs_identical(comparison)
+    comparison.support_mismatch_count == 0 &&
+    comparison.only_file1_count == 0 &&
+    comparison.only_file2_count == 0 &&
+    comparison.output_file1_count == comparison.output_file2_count
+end
+
+@testset "Toy outputs match benchmark answers" begin
+    minsup = 0.3
+    toy_files = [
+        "input1.txt",
+        "input2.txt",
+        "input3.txt",
+        "input4.txt",
+        "input5.txt",
+    ]
+    algorithms = [
+        ("classic", run_fpgrowth),
+        ("projection", run_projection_fpgrowth),
+        ("adjacency", run_adjacency_fpgrowth),
+    ]
+
     mktempdir() do tempdir
-        identical_results = [
-            ([1], 3),
-            ([1, 2], 2),
-            ([2, 3], 2),
-        ]
+        for filename in toy_files
+            input_path = joinpath(@__DIR__, "..", "dataset", "toy", filename)
+            benchmark_path = joinpath(@__DIR__, "..", "dataset", "toy_benchmark", replace(filename, ".txt" => "_ans.txt"))
+            transactions = read_spmf(input_path)
 
-        write_output(joinpath(tempdir, "current.txt"), copy(identical_results))
-        write_output(joinpath(tempdir, "system.txt"), reverse(copy(identical_results)))
+            for (algorithm_name, runner) in algorithms
+                results, _ = runner(transactions, minsup)
+                generated_path = joinpath(tempdir, "$(algorithm_name)_$(replace(filename, ".txt" => ""))_generated.txt")
+                write_output(generated_path, results)
 
-        identical_comparison = compare_output_results("current.txt", "system.txt", tempdir)
-
-        identical_buffer = IOBuffer()
-        print_output_comparison_summary(identical_buffer, identical_comparison)
-        identical_output = String(take!(identical_buffer))
-
-        @test occursin("Match rate vs file 1: 100.0%", identical_output)
-        @test occursin("Match rate vs file 2: 100.0%", identical_output)
-        @test occursin("Outputs identical: true", identical_output)
-
-        write_output(joinpath(tempdir, "system_mismatch.txt"), [([1], 4), ([2, 3], 2), ([4], 1)])
-
-        mismatch_comparison = compare_output_results("current.txt", "system_mismatch.txt", tempdir)
-
-        mismatch_buffer = IOBuffer()
-        print_output_comparison_summary(mismatch_buffer, mismatch_comparison)
-        mismatch_output = String(take!(mismatch_buffer))
-
-        @test occursin("Outputs identical: false", mismatch_output)
-        @test occursin("Support mismatches on shared itemsets: 1", mismatch_output)
-        @test occursin("Only in file 1: 1", mismatch_output)
-        @test occursin("Only in file 2: 1", mismatch_output)
+                comparison = compare_output_results(generated_path, benchmark_path)
+                @test outputs_identical(comparison)
+            end
+        end
     end
 end
