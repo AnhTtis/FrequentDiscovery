@@ -1,7 +1,0 @@
-name = "FrequentDiscovery"
-uuid = "0c18c11e-8849-4f88-9f16-65ccf0f7c8f5"
-authors = ["Codex"]
-version = "0.1.0"
-
-[compat]
-julia = "1.9"

@@ -75,7 +75,7 @@ function run_projection_fpgrowth(transactions, minsup)
     stats = MiningStats()
     results = Vector{Tuple{Vector{Int},Int}}()
     stats.transaction_count = length(transactions)
-    minsup = max(1, round(Int, minsup * length(transactions)))
+    minsup = max(1, ceil(Int, minsup * length(transactions)))
     reset_memory_tracking!(stats)
 
     elapsed = @elapsed begin
