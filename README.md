@@ -17,6 +17,9 @@ FrequentDiscovery/
 |   |   |-- adjacency_fpgrowth.jl
 |   |-- dataset/
 |   |-- unit_tests/
+|-- data/
+|   |-- eventlog_demo/
+|   |-- eventlog_output/
 |-- notebooks/
 |   |-- demo.ipynb
 |-- docs/
@@ -109,4 +112,6 @@ Trong implementation hien tai, `minsup` duoc parse la `Float64` va hieu theo ty 
 ## Notebook va bao cao
 
 - Notebook demo ung dung event log: `notebooks/demo.ipynb`
+- Du lieu input demo: `data/eventlog_demo/`
+- Ket qua output demo: `data/eventlog_output/`
 - Bao cao LaTeX cho phan ung dung: `docs/event_log_report.tex`
