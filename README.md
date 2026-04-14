@@ -6,7 +6,7 @@ FrequentDiscovery là đồ án khai phá frequent itemset bằng Julia cho môn
 - `projection`: FP-Growth theo projected database
 - `adjacency`: khai phá dựa trên đồ thị kề đồng xuất hiện và giao cắt tidset
 
-README này dùng để hướng dẫn cài môi trường, chạy chương trình, chạy các thí nghiệm phụ trợ, và kiểm thử tự động.
+README này dùng để hướng dẫn cài môi trường, chạy chương trình, chạy các thí nghiệm phụ trợ, và kiểm thử tự động. Đồng thời lưu trữ (bài làm của nhóm)[https://drive.google.com/drive/folders/1omIbvrSlTYMZvTGv6YHtId2PDjAYqdRL].
 
 ## 1. Thông tin nhóm
 
@@ -76,7 +76,7 @@ julia --project=. -e "using Pkg; Pkg.instantiate()"
 FrequentDiscovery/
 |-- README.md
 |-- Project.toml
-|-- dataset/
+|-- data/
 |   |-- benchmark/
 |   |   |-- accidents.txt
 |   |   |-- chess.txt
@@ -127,8 +127,8 @@ FrequentDiscovery/
 Ghi chú:
 
 - Thư mục output không bắt buộc phải có sẵn; chương trình sẽ tự tạo nếu bạn truyền một thư mục output mới.
-- Thư mục `dataset/retail_subsets/` chứa các file con được tách từ `retail.txt` theo nhiều tỉ lệ mẫu.
-- Thư mục `dataset/toy_benchmark/` chứa output tham chiếu để đối chiếu với kết quả sinh bởi ba thuật toán.
+- Thư mục `data/retail_subsets/` chứa các file con được tách từ `retail.txt` theo nhiều tỉ lệ mẫu.
+- Thư mục `data/toy_benchmark/` chứa output tham chiếu để đối chiếu với kết quả sinh bởi ba thuật toán.
 - Thư mục `experiment_result/` chứa các file `.csv` tổng hợp kết quả thực nghiệm để phục vụ báo cáo và so sánh.
 
 ## 5. Cách chạy chương trình
@@ -139,9 +139,9 @@ Các block log bên dưới giữ đúng format console của chương trình; c
 ### 5.1. Chạy một thuật toán trên một file hoặc một thư mục dữ liệu
 
 ```powershell
-julia src/main.jl -a classic dataset/benchmark/chess.txt output 0.55
-julia src/main.jl -a projection dataset/benchmark/chess.txt output 0.55
-julia src/main.jl -a adjacency dataset/benchmark/chess.txt output 0.55
+julia src/main.jl -a classic data/benchmark/chess.txt output 0.55
+julia src/main.jl -a projection data/benchmark/chess.txt output 0.55
+julia src/main.jl -a adjacency data/benchmark/chess.txt output 0.55
 ```
 
 Nếu `input_path` là thư mục, chương trình sẽ chạy lần lượt trên toàn bộ file trong thư mục đó.
@@ -151,7 +151,7 @@ Ví dụ log minh họa cho lệnh `classic`:
 ```text
 ========================================
 Algorithm: classic
-file: dataset/benchmark/chess.txt
+file: data/benchmark/chess.txt
 Transactions count from database : 3196
 Max memory usage: 12.34 MB
 Frequent itemsets count : 1234
@@ -187,7 +187,7 @@ Ví dụ nội dung `stats_classic_chess_55_0.txt`:
 
 ```text
 algorithm=classic
-input_file=dataset/benchmark/chess.txt
+input_file=data/benchmark/chess.txt
 minsup=0.55
 transactions=3196
 frequent itemsets=1234
@@ -203,7 +203,7 @@ peak_working_set_bytes=12939428
 ### 5.2. So sánh hai thuật toán trên cùng một bộ dữ liệu
 
 ```powershell
-julia src/main.jl -c classic projection dataset/benchmark/chess.txt output 0.55
+julia src/main.jl -c classic projection data/benchmark/chess.txt output 0.55
 ```
 
 Lệnh này sẽ chạy hai thuật toán, đọc lại file `stats_*.txt`, rồi in phần so sánh thời gian chạy, số lượng mẫu và bộ nhớ.
@@ -213,7 +213,7 @@ Log minh họa:
 ```text
 ========================================
 Algorithm: classic
-file: dataset/benchmark/chess.txt
+file: data/benchmark/chess.txt
 Transactions count from database : 3196
 Max memory usage: 12.34 MB
 Frequent itemsets count : 1234
@@ -227,7 +227,7 @@ Minimum support: 0.55
 ========================================
 ========================================
 Algorithm: projection
-file: dataset/benchmark/chess.txt
+file: data/benchmark/chess.txt
 Transactions count from database : 3196
 Max memory usage: 10.91 MB
 Frequent itemsets count : 1234
@@ -240,7 +240,7 @@ Peak RAM (MB): 10.91
 Minimum support: 0.55
 ========================================
 ========================================
-Comparison file: dataset/benchmark/chess.txt
+Comparison file: data/benchmark/chess.txt
 Minimum support: 0.55
 Algorithm 1: classic
   Transactions count from database : 3196
@@ -267,7 +267,7 @@ File được tạo:
 ### 5.3. Chạy cả ba thuật toán trên cùng một bộ dữ liệu
 
 ```powershell
-julia src/main.jl -ca dataset/benchmark/chess.txt output 0.55
+julia src/main.jl -ca data/benchmark/chess.txt output 0.55
 ```
 
 Lệnh này chạy lần lượt `classic`, `projection`, và `adjacency` trong ba tiến trình Julia riêng.
@@ -364,7 +364,7 @@ julia src/experiment/split_retail_subsets.jl [input_file] [output_dir] [ratios] 
 
 Lệnh này tương đương với mode `-s`, nhưng đi thẳng vào script tách subset.
 
-Chức năng: dùng để tách một file giao dịch trong `dataset/benchmark` hoặc một dataset lớn khác thành nhiều file con theo tỉ lệ.
+Chức năng: dùng để tách một file giao dịch trong `data/benchmark` hoặc một dataset lớn khác thành nhiều file con theo tỉ lệ.
 
 - `input_file`: file giao dịch gốc
 - `output_folder`: thư mục ghi các subset
@@ -380,14 +380,14 @@ Hai chế độ lấy mẫu:
 Ví dụ:
 
 ```powershell
-julia src/main.jl -s dataset/benchmark/retail.txt output/retail_subsets
-julia src/main.jl -s dataset/benchmark/retail.txt output/retail_subsets 0.10,0.25,0.50 2026 prefix
+julia src/main.jl -s data/benchmark/retail.txt output/retail_subsets
+julia src/main.jl -s data/benchmark/retail.txt output/retail_subsets 0.10,0.25,0.50 2026 prefix
 ```
 
 Log minh họa cho ví dụ thứ hai:
 
 ```text
-Input file: dataset/benchmark/retail.txt
+Input file: data/benchmark/retail.txt
 Total transactions: 88162
 Output directory: output/retail_subsets
 Ratios: 0.1,0.25,0.5
@@ -492,7 +492,7 @@ Toy outputs match benchmark answers |   15     15  0.8s
 Ý nghĩa:
 
 - Lệnh này chạy toàn bộ test được khai báo trong `test/runtests.jl`
-- Hiện tại test tập trung vào việc đối chiếu output của ba thuật toán với benchmark trong `dataset/toy_benchmark/`
+- Hiện tại test tập trung vào việc đối chiếu output của ba thuật toán với benchmark trong `data/toy_benchmark/`
 - Lệnh test không tạo file kết quả cố định trong repo; file tạm nếu có sẽ được tự dọn sau khi test xong
 
 ## 6. Luồng xử lý chung
@@ -607,7 +607,7 @@ Ví dụ:
 
 ```text
 algorithm=classic
-input_file=dataset/benchmark/chess.txt
+input_file=data/benchmark/chess.txt
 minsup=0.55
 transactions=3196
 frequent itemsets=1234
@@ -638,8 +638,8 @@ Toy outputs match benchmark answers |   15     15  0.8s
 Hiện tại `test/runtests.jl` nạp `test/test_benchmark.jl`, và testset này kiểm tra:
 
 - output của cả ba thuật toán `classic`, `projection`, và `adjacency`
-- dữ liệu toy trong `dataset/toy/`
-- benchmark tham chiếu trong `dataset/toy_benchmark/`
+- dữ liệu toy trong `data/toy/`
+- benchmark tham chiếu trong `data/toy_benchmark/`
 
 Mục tiêu là đảm bảo ba thuật toán sinh ra output đúng theo benchmark đã chuẩn bị sẵn.
 Lệnh test không tạo file kết quả cố định trong repo; các file trung gian nếu có sẽ được đặt trong thư mục tạm và tự dọn sau khi test kết thúc.
@@ -652,3 +652,4 @@ Lệnh test không tạo file kết quả cố định trong repo; các file tru
 - Lệnh `-b` so sánh trực tiếp hai file output và in tỉ lệ itemset khớp nhau
 - Lệnh `-s` tạo các subset theo tỉ lệ để phục vụ benchmark kích thước dữ liệu
 - Lệnh `-tl` sinh dataset giả lập theo nhiều độ dài transaction khác nhau
+

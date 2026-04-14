@@ -27,8 +27,8 @@ end
 
     mktempdir() do tempdir
         for filename in toy_files
-            input_path = joinpath(@__DIR__, "..", "dataset", "toy", filename)
-            benchmark_path = joinpath(@__DIR__, "..", "dataset", "toy_benchmark", replace(filename, ".txt" => "_ans.txt"))
+            input_path = joinpath(@__DIR__, "..", "data", "toy", filename)
+            benchmark_path = joinpath(@__DIR__, "..", "data", "toy_benchmark", replace(filename, ".txt" => "_ans.txt"))
             transactions = read_spmf(input_path)
 
             for (algorithm_name, runner) in algorithms

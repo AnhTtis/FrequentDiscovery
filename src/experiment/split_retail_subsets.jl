@@ -5,8 +5,8 @@ using Random
 export split_database_subsets, run_split_cli
 
 const PROJECT_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
-const DEFAULT_INPUT_FILE = normpath(joinpath(PROJECT_ROOT, "dataset", "benchmark", "retail.txt"))
-const DEFAULT_OUTPUT_DIR = normpath(joinpath(PROJECT_ROOT, "dataset", "retail_subsets"))
+const DEFAULT_INPUT_FILE = normpath(joinpath(PROJECT_ROOT, "data", "benchmark", "retail.txt"))
+const DEFAULT_OUTPUT_DIR = normpath(joinpath(PROJECT_ROOT, "data", "retail_subsets"))
 const DEFAULT_RATIOS = [0.10, 0.25, 0.50, 0.75, 1.00]
 const DEFAULT_RANDOM_SEED = 2026
 const DEFAULT_SAMPLING = "independent"
