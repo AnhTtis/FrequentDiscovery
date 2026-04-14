@@ -6,7 +6,7 @@ FrequentDiscovery là đồ án khai phá frequent itemset bằng Julia cho môn
 - `projection`: FP-Growth theo projected database
 - `adjacency`: khai phá dựa trên đồ thị kề đồng xuất hiện và giao cắt tidset
 
-README này dùng để hướng dẫn cài môi trường, chạy chương trình, chạy các thí nghiệm phụ trợ, và kiểm thử tự động. Đồng thời lưu trữ (bài làm của nhóm)[https://drive.google.com/drive/folders/1omIbvrSlTYMZvTGv6YHtId2PDjAYqdRL].
+README này dùng để hướng dẫn cài môi trường, chạy chương trình, chạy các thí nghiệm phụ trợ, và kiểm thử tự động. Đồng thời lưu trữ [bài làm của nhóm](https://drive.google.com/drive/folders/1omIbvrSlTYMZvTGv6YHtId2PDjAYqdRL).
 
 ## 1. Thông tin nhóm
 
