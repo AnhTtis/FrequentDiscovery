@@ -1,0 +1,89 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\geometry{margin=2.5cm}
+\onehalfspacing
+
+\title{BÁO CÁO THỰC HÀNH\\[4pt]
+Phát hiện mẫu trong nhật ký sự kiện bằng Frequent Itemset Mining}
+\author{Môn: Khai thác dữ liệu và ứng dụng (CSC14004)}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Mục tiêu}
+Bài thực hành này áp dụng Frequent Itemset Mining trên dữ liệu nhật ký sự kiện (event log) để tìm các tổ hợp sự kiện xuất hiện cùng nhau thường xuyên. Từ các mẫu tìm được, nhóm thảo luận khả năng phát hiện lỗi vận hành và hành vi bất thường trong hệ thống.
+
+\section{Môi trường và dữ liệu}
+\subsection{Môi trường}
+\begin{itemize}[leftmargin=1.5em]
+    \item Mã nguồn chính: \texttt{src/main.jl}.
+    \item Giao diện chạy: CLI.
+    \item Notebook minh họa: \texttt{notebooks/demo.ipynb}.
+\end{itemize}
+
+\subsection{Dữ liệu}
+Dữ liệu đầu vào được mô phỏng theo định dạng transaction, mỗi dòng tương ứng một cửa sổ thời gian quan sát. Mỗi transaction gồm các mã sự kiện nguyên dương (ví dụ: \texttt{AUTH\_FAILURE}, \texttt{SUDO\_COMMAND}, \texttt{DATABASE\_ERROR}).
+
+\section{Quy trình thực hiện}
+\subsection{Bước 1: Chuẩn bị event log}
+Nhóm xây dựng tập giao dịch sự kiện mẫu và một bảng ánh xạ mã sự kiện sang tên sự kiện để phục vụ diễn giải kết quả.
+
+\subsection{Bước 2: Chạy các chế độ CLI}
+Sử dụng ba chế độ chính:
+\begin{itemize}[leftmargin=1.5em]
+    \item \texttt{-a}: chạy một thuật toán cụ thể.
+    \item \texttt{-c}: so sánh hai thuật toán trên cùng tập input.
+    \item \texttt{-ca}: chạy toàn bộ thuật toán trên cùng tập input.
+\end{itemize}
+
+\noindent Các alias thuật toán sử dụng trong bài:
+\begin{itemize}[leftmargin=1.5em]
+    \item \texttt{classic} (hoặc \texttt{fpgrowth})
+    \item \texttt{projection} (hoặc \texttt{projected\_fpgrowth})
+    \item \texttt{adjacency} (hoặc \texttt{adjacency\_fpgrowth})
+\end{itemize}
+
+\subsection{Bước 3: Đọc và phân tích kết quả}
+Từ các file output, nhóm trích các itemset có support cao, giải mã thành tên sự kiện và nhận diện các tổ hợp đáng chú ý liên quan đến lỗi hoặc nguy cơ bảo mật.
+
+\section{Lưu ý về tham số minsup}
+Trong implementation hiện tại, \texttt{minsup} được diễn giải theo \textbf{tỷ lệ} trong khoảng $[0,1]$. Ví dụ, \texttt{minsup = 0.30} nghĩa là ngưỡng hỗ trợ bằng $30\%$ số transaction.
+
+\section{Kết quả quan sát}
+\subsection{Các mẫu thường xuyên}
+Kết quả cho thấy một số nhóm sự kiện lặp lại nhiều lần, phản ánh các mẫu hoạt động xuất hiện ổn định trong log.
+
+\subsection{Các tổ hợp có ý nghĩa cảnh báo}
+Những mẫu chứa các sự kiện như \texttt{AUTH\_FAILURE}, \texttt{PRIV\_ESCALATION\_ATTEMPT}, \texttt{SUDO\_COMMAND}, \texttt{FILE\_PERMISSION\_DENIED} là các ứng viên cần ưu tiên giám sát.
+
+\section{Thảo luận khả năng phát hiện lỗi/hành vi bất thường}
+\begin{enumerate}[leftmargin=1.5em]
+    \item Frequent itemset giúp mô tả các mẫu đồng xuất hiện lặp lại trong nhật ký.
+    \item Khi support của một pattern tăng đột biến theo thời gian, đây là tín hiệu cảnh báo sớm.
+    \item Có thể dùng các mẫu frequent làm baseline cho hệ thống theo dõi vận hành.
+\end{enumerate}
+
+\noindent \textbf{Hạn chế:} các anomaly hiếm thường không đủ support để trở thành frequent itemset. Vì vậy cần kết hợp thêm các kỹ thuật khác như phân tích theo cửa sổ thời gian, luật kết hợp (confidence/lift), hoặc mô hình phát hiện bất thường chuyên biệt.
+
+\section{Kết luận}
+Phần thực hành đã đáp ứng yêu cầu ứng dụng Chương 5(b): khai thác tổ hợp sự kiện thường xuyên trên event log bằng chính cài đặt của nhóm và thảo luận được ý nghĩa của kết quả trong bối cảnh phát hiện lỗi, rủi ro bảo mật và bất thường vận hành.
+
+\section*{Phụ lục: Lệnh CLI mẫu}
+\begin{verbatim}
+julia main.jl -a classic <input_path> <output_folder> <minsup>
+julia main.jl -c classic projection <input_file> <output_folder> <minsup>
+julia main.jl -ca <input_file> <output_folder> <minsup>
+\end{verbatim}
+
+\end{document}
