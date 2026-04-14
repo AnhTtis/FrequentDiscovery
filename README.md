@@ -12,7 +12,7 @@ README này dùng để hướng dẫn cài môi trường, chạy chương trì
 
 | STT | Họ và tên | MSSV |
 | --- | --- | --- |
-| 1 | Nguyễn Hữu Anh Trí | 23127160 |
+| 1 | Nguyễn Hữu Anh Trí | 23127130 |
 | 2 | Cao Trần Bá Đạt | 23127168 |
 | 3 | Tô Trần Hoàng Triệu | 23127133 |
 | 4 | Cao Tấn Hoàng Huy | 23127051 |
