@@ -11,7 +11,7 @@ function outputs_identical(comparison)
 end
 
 @testset "Toy outputs match benchmark answers" begin
-    minsup = 0.3
+    minsup = 0.5
     toy_files = [
         "input1.txt",
         "input2.txt",

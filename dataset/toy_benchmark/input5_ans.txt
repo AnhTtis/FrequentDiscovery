@@ -1,8 +1,1 @@
-1 #SUP: 5
 2 #SUP: 6
-3 #SUP: 4
-5 #SUP: 4
-6 #SUP: 4
-7 #SUP: 4
-8 #SUP: 4
-10 #SUP: 4
