@@ -1,6 +1,7 @@
 module FPGrowth
 
 using ..Structures
+using ..Utils: reset_memory_tracking!, sample_memory!
 
 export build_fptree, mine_tree, run_fpgrowth
 
@@ -12,11 +13,16 @@ function build_fptree(transactions, minsup)
 end
 
 function build_fptree(transactions, minsup, stats::Union{MiningStats,Nothing})
+    sample_memory!(stats)
     freq = Dict{Int,Int}()
 
-    for transaction in transactions
+    for (index, transaction) in enumerate(transactions)
         for item in transaction
             freq[item] = get(freq, item, 0) + 1
+        end
+
+        if stats !== nothing && index % 256 == 0
+            sample_memory!(stats)
         end
     end
 
@@ -32,12 +38,17 @@ function build_fptree(transactions, minsup, stats::Union{MiningStats,Nothing})
         stats.tree_count += 1
     end
 
-    for transaction in transactions
+    for (index, transaction) in enumerate(transactions)
         items = [item for item in transaction if haskey(freq, item)]
         sort!(items, by = item -> (-freq[item], item))
         insert_tree!(tree.root, items, tree, stats)
+
+        if stats !== nothing && index % 256 == 0
+            sample_memory!(stats)
+        end
     end
 
+    sample_memory!(stats)
     return tree
 end
 
@@ -108,11 +119,16 @@ function build_cond_tree(pattern_base, minsup)
 end
 
 function build_cond_tree(pattern_base, minsup, stats::Union{MiningStats,Nothing})
+    sample_memory!(stats)
     transactions = Vector{Vector{Int}}()
 
-    for (path, count) in pattern_base
+    for (index, (path, count)) in enumerate(pattern_base)
         for _ in 1:count
             push!(transactions, path)
+        end
+
+        if stats !== nothing && index % 128 == 0
+            sample_memory!(stats)
         end
     end
 
@@ -124,7 +140,9 @@ function build_cond_tree(pattern_base, minsup, stats::Union{MiningStats,Nothing}
         stats.conditional_tree_count += 1
     end
 
-    return build_fptree(transactions, minsup, stats)
+    tree = build_fptree(transactions, minsup, stats)
+    sample_memory!(stats)
+    return tree
 end
 
 ############################
@@ -135,9 +153,10 @@ function mine_tree(tree, prefix, results, minsup)
 end
 
 function mine_tree(tree, prefix, results, minsup, stats::Union{MiningStats,Nothing})
+    sample_memory!(stats)
     items = sort(collect(keys(tree.header)), by = item -> (tree.support[item], item))
 
-    for item in items
+    for (index, item) in enumerate(items)
         new_pattern = vcat(prefix, item)
 
         support = 0
@@ -158,22 +177,30 @@ function mine_tree(tree, prefix, results, minsup, stats::Union{MiningStats,Nothi
         if cond_tree != nothing
             mine_tree(cond_tree, new_pattern, results, minsup, stats)
         end
+
+        if stats !== nothing && index % 32 == 0
+            sample_memory!(stats)
+        end
     end
 end
 
 function run_fpgrowth(transactions, minsup)
     stats = MiningStats()
     results = Vector{Tuple{Vector{Int},Int}}()
-    minsup = max(1, round(Int, minsup * length(transactions)))
+    stats.transaction_count = length(transactions)
+    minsup = max(1, ceil(Int, minsup * length(transactions)))
+    reset_memory_tracking!(stats)
 
     elapsed = @elapsed begin
+        sample_memory!(stats)
         tree = build_fptree(transactions, minsup, stats)
         if tree != nothing
             mine_tree(tree, Int[], results, minsup, stats)
         end
+        sample_memory!(stats)
     end
 
-    stats.runtime_ns = round(Int, elapsed * 1_000_000_000)
+    stats.runtime_ns = round(Int64, elapsed * 1_000_000_000)
     sort!(results, by = entry -> (length(entry[1]), entry[1]))
     stats.frequent_itemset_count = length(results)
     return results, stats

@@ -1,6 +1,97 @@
 module Utils
 
-export ensure_output_dir, list_input_files, parse_cli_args, read_spmf, read_output, stem_name, write_benchmark_output, write_output, print_algorithm_summary, print_benchmark_summary
+using ..Structures: MiningStats
+
+export ensure_output_dir, list_input_files, parse_cli_args, read_spmf, read_output, read_stats_output, resolve_existing_file, stem_name, stats_output_path, compare_output_results, write_output, write_stats_output, print_algorithm_summary, print_output_comparison_summary, print_comparison_summary, reset_memory_tracking!, sample_memory!, memory_tracking_supported
+
+const DEFAULT_SUBSET_RATIOS = [0.10, 0.25, 0.50, 0.75, 1.00]
+const DEFAULT_SUBSET_SEED = 2026
+const DEFAULT_SUBSET_SAMPLING = "independent"
+const DEFAULT_TRANSACTION_LENGTH_COUNT = 1000
+const DEFAULT_TRANSACTION_LENGTH_ITEMS = 100
+const DEFAULT_TRANSACTION_ITEM_RANGE = 1:DEFAULT_TRANSACTION_LENGTH_ITEMS
+const DEFAULT_TRANSACTION_LENGTHS = [5, 10, 20, 30, 50]
+
+function format_memory(bytes::Integer)
+    units = ["bytes", "KB", "MB", "GB", "TB"]
+    value = Float64(bytes)
+    unit_index = 1
+
+    while value >= 1024 && unit_index < length(units)
+        value /= 1024
+        unit_index += 1
+    end
+
+    if unit_index == 1
+        return "$(bytes) $(units[unit_index])"
+    end
+
+    return "$(round(value, digits = 2)) $(units[unit_index])"
+end
+
+function format_runtime_ms(runtime_ns::Integer)
+    return round(runtime_ns / 1_000_000, digits = 2)
+end
+
+memory_tracking_supported() = isdefined(Base, :gc_live_bytes)
+
+function read_process_memory()
+    if !memory_tracking_supported()
+        return nothing
+    end
+
+    try
+        return Int64(Base.gc_live_bytes())
+    catch err
+        if err isa InexactError
+            return nothing
+        end
+        rethrow()
+    end
+end
+
+function reset_memory_tracking!(stats::MiningStats)
+    GC.gc()
+    stats.peak_working_set_bytes = 0
+    stats.memory_baseline_bytes = 0
+
+    sample = read_process_memory()
+    if sample === nothing
+        return stats
+    end
+
+    stats.memory_baseline_bytes = sample
+    return stats
+end
+
+function sample_memory!(stats::Nothing)
+    return nothing
+end
+
+function sample_memory!(stats::MiningStats)
+    sample = read_process_memory()
+    if sample === nothing
+        return nothing
+    end
+
+    stats.peak_working_set_bytes = max(stats.peak_working_set_bytes, sample)
+    return nothing
+end
+
+function format_memory_mb(bytes::Integer)
+    return round(bytes / 1024^2, digits = 2)
+end
+
+function print_main_usage()
+    println("Usage:")
+    println(" Algorithm: classic/fpgrowth, projection/projected_fpgrowth, adjacency/adjacency_fpgrowth")
+    println("  julia main.jl -a <algorithm> <input_path> <output_folder> <minsup>")
+    println("  julia main.jl -c <alg1> <alg2> <input_file> <output_folder> <minsup>")
+    println("  julia main.jl -ca <input_file> <output_folder> <minsup>")
+    println("  julia main.jl -b <output_file1> <output_file2> <output_folder>")
+    println("  julia main.jl -s <input_file> <output_folder> [ratios] [seed] [sampling]")
+    println("  julia main.jl -tl <output_folder> [num_transactions] [num_items_or_range] [lengths]")
+end
 
 """
 Read SPMF-style transaction data and remove duplicates inside each transaction.
@@ -77,14 +168,81 @@ function stem_name(path::String)
     return splitext(basename(path))[1]
 end
 
+function resolve_existing_file(path::String, base_dir::String="")
+    if isfile(path)
+        return path
+    end
+
+    if !isempty(base_dir)
+        candidate = joinpath(base_dir, path)
+        if isfile(candidate)
+            return candidate
+        end
+    end
+
+    println("File not found: $path")
+    if !isempty(base_dir)
+        println("Checked in output folder: $(joinpath(base_dir, path))")
+    end
+    exit()
+end
+
+function stats_output_path(output_dir::String, algorithm_name::String, input_file::String, minsup::Float64)
+    base = stem_name(input_file)
+    minsup_label = replace(string(round(minsup * 100, digits = 2)), "." => "_")
+    return joinpath(output_dir, "stats_$(algorithm_name)_$(base)_$(minsup_label).txt")
+end
+
+function parse_subset_ratios(text::String)
+    ratios = parse.(Float64, split(text, ","))
+    isempty(ratios) && error("Subset ratios must not be empty.")
+
+    for ratio in ratios
+        if ratio <= 0 || ratio > 1
+            error("Invalid subset ratio $ratio. Ratios must be in (0, 1].")
+        end
+    end
+
+    return ratios
+end
+
+function parse_transaction_lengths(text::String)
+    lengths = parse.(Int, split(text, ","))
+    isempty(lengths) && error("Transaction lengths must not be empty.")
+
+    for length_value in lengths
+        if length_value <= 0
+            error("Invalid transaction length $length_value. Lengths must be positive.")
+        end
+    end
+
+    return lengths
+end
+
+function parse_transaction_item_range(text::String)
+    if occursin(":", text)
+        bounds = split(text, ":", limit = 2)
+        length(bounds) == 2 || error("Invalid item range: $text. Use start:end.")
+
+        start_item = parse(Int, strip(bounds[1]))
+        end_item = parse(Int, strip(bounds[2]))
+
+        if start_item > end_item
+            error("Invalid item range: $text. Start must be <= end.")
+        end
+
+        return start_item:end_item
+    end
+
+    item_count = parse(Int, text)
+    item_count > 0 || error("Invalid number of items: $item_count")
+    return 1:item_count
+end
+
+
 function parse_cli_args(args)
     if isempty(args)
-        println("Usage:")
-        println(" Algorithm: classic/fpgrowth, projection/projected_fpgrowth, adjacency/adjacency_fpgrowth")
-        println("  julia main.jl -a <algorithm> <input_path> <output_folder> <minsup>")
-        println("  julia main.jl -c <alg1> <alg2> <input_file> <output_folder> <minsup>")
-        println("  julia main.jl -ca <input_file> <output_folder> <minsup>")
-        println("  julia main.jl -b <algorithm> <input_file> <output_folder> <minsup>")
+        print_main_usage()
         exit()
     end
 
@@ -96,70 +254,175 @@ function parse_cli_args(args)
         return (mode = mode, algorithm1 = args[2], algorithm2 = args[3], input_path = args[4], output_path = args[5], minsup = parse(Float64, args[6]))
     elseif mode == "-ca" && length(args) == 4
         return (mode = mode, input_path = args[2], output_path = args[3], minsup = parse(Float64, args[4]))
-    elseif mode == "-b" && length(args) == 5
-        return (mode = mode, algorithm = args[2], input_path = args[3], output_path = args[4], minsup = parse(Float64, args[5]))
+    elseif mode == "-b" && length(args) == 4
+        return (mode = mode, output_file1 = args[2], output_file2 = args[3], output_path = args[4])
+    elseif mode == "-s" && 3 <= length(args) <= 6
+        ratios = length(args) >= 4 ? parse_subset_ratios(args[4]) : DEFAULT_SUBSET_RATIOS
+        seed = length(args) >= 5 ? parse(Int, args[5]) : DEFAULT_SUBSET_SEED
+        sampling = length(args) >= 6 ? lowercase(args[6]) : DEFAULT_SUBSET_SAMPLING
+
+        if !(sampling in ("independent", "prefix"))
+            println("Invalid sampling mode: $sampling")
+            println("Available sampling modes: independent, prefix")
+            exit()
+        end
+
+        return (mode = mode, input_path = args[2], output_path = args[3], ratios = ratios, seed = seed, sampling = sampling)
+    elseif mode == "-tl" && 2 <= length(args) <= 5
+        transaction_count = length(args) >= 3 ? parse(Int, args[3]) : DEFAULT_TRANSACTION_LENGTH_COUNT
+        item_range = length(args) >= 4 ? parse_transaction_item_range(args[4]) : DEFAULT_TRANSACTION_ITEM_RANGE
+        lengths = length(args) >= 5 ? parse_transaction_lengths(args[5]) : DEFAULT_TRANSACTION_LENGTHS
+
+        if transaction_count <= 0
+            println("Invalid number of transactions: $transaction_count")
+            exit()
+        end
+
+        if maximum(lengths) > length(item_range)
+            println("Maximum transaction length $(maximum(lengths)) exceeds available items $(length(item_range)) in range $(first(item_range)):$(last(item_range)).")
+            exit()
+        end
+
+        return (
+            mode = mode,
+            output_path = args[2],
+            transaction_count = transaction_count,
+            transaction_item_range = item_range,
+            transaction_lengths = lengths,
+        )
     end
 
     println("Invalid arguments.")
-    println("Usage:")
-    println("  julia main.jl -a <algorithm> <input_path> <output_folder> <minsup>")
-    println("  julia main.jl -c <alg1> <alg2> <input_file> <output_folder> <minsup>")
-    println("  julia main.jl -ca <input_file> <output_folder> <minsup>")
-    println("  julia main.jl -b <algorithm> <input_file> <output_folder> <minsup>")
+    print_main_usage()
     exit()
 end
 
-function write_benchmark_output(
-    path::String,
-    system_name::String,
-    system_results,
-    local_name::String,
-    local_results,
-    patterns_equal::Bool,
-    input_file::String,
-    minsup_label::String,
-)
+function write_stats_output(path::String, algorithm_name::String, stats::MiningStats, input_file::String, minsup::Float64)
     open(path, "w") do io
+        println(io, "algorithm=$algorithm_name")
         println(io, "input_file=$input_file")
-        println(io, "minsup=$minsup_label")
-        println(io, "system_output=$system_name")
-        println(io, "system_patterns=$(length(system_results))")
-        println(io, "local_output=$local_name")
-        println(io, "local_patterns=$(length(local_results))")
-        println(io, "patterns_equal=$patterns_equal")
+        println(io, "minsup=$minsup")
+        println(io, "transactions=$(stats.transaction_count)")
+        println(io, "frequent itemsets=$(stats.frequent_itemset_count)")
+        println(io, "runtime_ns=$(stats.runtime_ns)")
+        println(io, "nodes=$(stats.node_count)")
+        println(io, "trees=$(stats.tree_count)")
+        println(io, "conditional_trees=$(stats.conditional_tree_count)")
+        println(io, "projections=$(stats.projection_count)")
+        println(io, "memory_baseline_bytes=$(stats.memory_baseline_bytes)")
+        println(io, "peak_working_set_bytes=$(stats.peak_working_set_bytes)")
     end
 end
 
-function print_benchmark_summary(
-    system_name::String,
-    system_results,
-    local_name::String,
-    local_results,
-    patterns_equal::Bool,
-    input_file::String,
-    minsup_label::String,
-)
+function read_stats_output(path::String)
+    stats = Dict{String,String}()
+
+    for line in eachline(path)
+        stripped = strip(line)
+        isempty(stripped) && continue
+        parts = split(stripped, "=", limit = 2)
+        length(parts) == 2 || continue
+        stats[parts[1]] = parts[2]
+    end
+
+    return stats
+end
+
+function compare_output_results(output_file1::String, output_file2::String, base_dir::String="")
+    resolved_file1 = resolve_existing_file(output_file1, base_dir)
+    resolved_file2 = resolve_existing_file(output_file2, base_dir)
+
+    canonical_file1 = Dict(Tuple(sort(items)) => support for (items, support) in read_output(resolved_file1))
+    canonical_file2 = Dict(Tuple(sort(items)) => support for (items, support) in read_output(resolved_file2))
+
+    keys1 = Set(keys(canonical_file1))
+    keys2 = Set(keys(canonical_file2))
+    shared_keys = intersect(keys1, keys2)
+
+    exact_match_count = count(key -> canonical_file1[key] == canonical_file2[key], shared_keys)
+
+    return (
+        output_file1 = resolved_file1,
+        output_file2 = resolved_file2,
+        output_file1_count = length(canonical_file1),
+        output_file2_count = length(canonical_file2),
+        exact_match_count = exact_match_count,
+        support_mismatch_count = length(shared_keys) - exact_match_count,
+        only_file1_count = length(setdiff(keys1, keys2)),
+        only_file2_count = length(setdiff(keys2, keys1)),
+    )
+end
+
+function format_percentage(numerator::Integer, denominator::Integer)
+    if denominator == 0
+        return "100.0%"
+    end
+
+    return "$(round(numerator / denominator * 100, digits = 2))%"
+end
+
+function print_output_comparison_summary(comparison)
+    print_output_comparison_summary(stdout, comparison)
+end
+
+function print_output_comparison_summary(io::IO, comparison)
+    patterns_equal =
+        comparison.support_mismatch_count == 0 &&
+        comparison.only_file1_count == 0 &&
+        comparison.only_file2_count == 0 &&
+        comparison.output_file1_count == comparison.output_file2_count
+
+    println(io, repeat("=", 40))
+    println(io, "Output file 1 (current): $(basename(comparison.output_file1))")
+    println(io, "Output file 2 (system): $(basename(comparison.output_file2))")
+    println(io, "Itemsets in file 1: $(comparison.output_file1_count)")
+    println(io, "Itemsets in file 2: $(comparison.output_file2_count)")
+    println(io, "Exact matches (same itemset + same support): $(comparison.exact_match_count)")
+    println(io, "Match rate vs file 1: $(format_percentage(comparison.exact_match_count, comparison.output_file1_count))")
+    println(io, "Match rate vs file 2: $(format_percentage(comparison.exact_match_count, comparison.output_file2_count))")
+    println(io, "Support mismatches on shared itemsets: $(comparison.support_mismatch_count)")
+    println(io, "Only in file 1: $(comparison.only_file1_count)")
+    println(io, "Only in file 2: $(comparison.only_file2_count)")
+    println(io, "Outputs identical: $patterns_equal")
+    println(io, repeat("=", 40))
+end
+
+function print_comparison_summary(left::Dict{String,String}, right::Dict{String,String})
+    left_patterns = get(left, "patterns", get(left, "frequent itemsets", "n/a"))
+    right_patterns = get(right, "patterns", get(right, "frequent itemsets", "n/a"))
+
     println(repeat("=", 40))
-    println("Benchmark file: $input_file")
-    println("Minimum support: $minsup_label")
-    println("System output: $system_name")
-    println("System patterns: $(length(system_results))")
-    println("Local output: $local_name")
-    println("Local patterns: $(length(local_results))")
-    println("Patterns equal: $patterns_equal")
+    println("Comparison file: $(left["input_file"])")
+    println("Minimum support: $(left["minsup"])")
+    println("Algorithm 1: $(left["algorithm"])")
+    println("  Transactions count from database : $(left["transactions"])")
+    println("  Max memory usage: $(format_memory(parse(Int64, left["peak_working_set_bytes"])))")
+    println("  Frequent itemsets count : $left_patterns")
+    println("  Total time ~ $(format_runtime_ms(parse(Int64, left["runtime_ns"]))) ms")
+    println("Algorithm 2: $(right["algorithm"])")
+    println("  Transactions count from database : $(right["transactions"])")
+    println("  Max memory usage: $(format_memory(parse(Int64, right["peak_working_set_bytes"])))")
+    println("  Frequent itemsets count : $right_patterns")
+    println("  Total time ~ $(format_runtime_ms(parse(Int64, right["runtime_ns"]))) ms")
     println(repeat("=", 40))
 end
 
-function print_algorithm_summary(algorithm_name::String, results, stats, input_file::String, minsup)
+function print_algorithm_summary(algorithm_name::String, stats, input_file::String, minsup)
     println(repeat("=", 40))
     println("Algorithm: $algorithm_name")
     println("file: $input_file")
-    println("Patterns: $(stats.frequent_itemset_count)")
-    println("Runtime (ns): $(stats.runtime_ns)")
+    println("Transactions count from database : $(stats.transaction_count)")
+    println("Frequent itemsets count : $(stats.frequent_itemset_count)")
+    println("Total time ~ $(format_runtime_ms(stats.runtime_ns)) ms")
     println("Nodes: $(stats.node_count)")
     println("Trees: $(stats.tree_count)")
     println("Conditional trees: $(stats.conditional_tree_count)")
     println("Projections: $(stats.projection_count)")
+    if stats.peak_working_set_bytes > 0
+        println("Peak RAM (MB): $(format_memory_mb(stats.peak_working_set_bytes))")
+    else
+        println("Peak RAM (MB): n/a")
+    end
     println("Minimum support: $minsup")
     println(repeat("=", 40))
 end
