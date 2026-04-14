@@ -1,0 +1,18 @@
+1 #SUP: 12
+2 #SUP: 15
+3 #SUP: 10
+4 #SUP: 7
+5 #SUP: 9
+6 #SUP: 7
+7 #SUP: 6
+8 #SUP: 9
+10 #SUP: 6
+11 #SUP: 6
+1 2 #SUP: 8
+2 3 #SUP: 7
+2 4 #SUP: 6
+2 5 #SUP: 6
+2 7 #SUP: 6
+1 8 #SUP: 9
+2 8 #SUP: 7
+1 2 8 #SUP: 7

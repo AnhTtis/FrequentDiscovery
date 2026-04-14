@@ -4,6 +4,14 @@ using ..Structures: MiningStats
 
 export ensure_output_dir, list_input_files, parse_cli_args, read_spmf, read_output, read_stats_output, resolve_existing_file, stem_name, stats_output_path, compare_output_results, write_output, write_stats_output, print_algorithm_summary, print_output_comparison_summary, print_comparison_summary, reset_memory_tracking!, sample_memory!, memory_tracking_supported
 
+const DEFAULT_SUBSET_RATIOS = [0.10, 0.25, 0.50, 0.75, 1.00]
+const DEFAULT_SUBSET_SEED = 2026
+const DEFAULT_SUBSET_SAMPLING = "independent"
+const DEFAULT_TRANSACTION_LENGTH_COUNT = 1000
+const DEFAULT_TRANSACTION_LENGTH_ITEMS = 100
+const DEFAULT_TRANSACTION_ITEM_RANGE = 1:DEFAULT_TRANSACTION_LENGTH_ITEMS
+const DEFAULT_TRANSACTION_LENGTHS = [5, 10, 20, 30, 50]
+
 function format_memory(bytes::Integer)
     units = ["bytes", "KB", "MB", "GB", "TB"]
     value = Float64(bytes)
@@ -68,6 +76,21 @@ function sample_memory!(stats::MiningStats)
 
     stats.peak_working_set_bytes = max(stats.peak_working_set_bytes, sample)
     return nothing
+end
+
+function format_memory_mb(bytes::Integer)
+    return round(bytes / 1024^2, digits = 2)
+end
+
+function print_main_usage()
+    println("Usage:")
+    println(" Algorithm: classic/fpgrowth, projection/projected_fpgrowth, adjacency/adjacency_fpgrowth")
+    println("  julia main.jl -a <algorithm> <input_path> <output_folder> <minsup>")
+    println("  julia main.jl -c <alg1> <alg2> <input_file> <output_folder> <minsup>")
+    println("  julia main.jl -ca <input_file> <output_folder> <minsup>")
+    println("  julia main.jl -b <output_file1> <output_file2> <output_folder>")
+    println("  julia main.jl -s <input_file> <output_folder> [ratios] [seed] [sampling]")
+    println("  julia main.jl -tl <output_folder> [num_transactions] [num_items_or_range] [lengths]")
 end
 
 """
@@ -170,18 +193,56 @@ function stats_output_path(output_dir::String, algorithm_name::String, input_fil
     return joinpath(output_dir, "stats_$(algorithm_name)_$(base)_$(minsup_label).txt")
 end
 
-function print_usage()
-    println("Usage:")
-    println(" Algorithm: classic/fpgrowth, projection/projected_fpgrowth, adjacency/adjacency_fpgrowth")
-    println("  julia main.jl -a <algorithm> <input_path> <output_folder> <minsup>")
-    println("  julia main.jl -c <alg1> <alg2> <input_file> <output_folder> <minsup>")
-    println("  julia main.jl -ca <input_file> <output_folder> <minsup>")
-    println("  julia main.jl -b <output_file1> <output_file2> <output_folder>")
+function parse_subset_ratios(text::String)
+    ratios = parse.(Float64, split(text, ","))
+    isempty(ratios) && error("Subset ratios must not be empty.")
+
+    for ratio in ratios
+        if ratio <= 0 || ratio > 1
+            error("Invalid subset ratio $ratio. Ratios must be in (0, 1].")
+        end
+    end
+
+    return ratios
 end
+
+function parse_transaction_lengths(text::String)
+    lengths = parse.(Int, split(text, ","))
+    isempty(lengths) && error("Transaction lengths must not be empty.")
+
+    for length_value in lengths
+        if length_value <= 0
+            error("Invalid transaction length $length_value. Lengths must be positive.")
+        end
+    end
+
+    return lengths
+end
+
+function parse_transaction_item_range(text::String)
+    if occursin(":", text)
+        bounds = split(text, ":", limit = 2)
+        length(bounds) == 2 || error("Invalid item range: $text. Use start:end.")
+
+        start_item = parse(Int, strip(bounds[1]))
+        end_item = parse(Int, strip(bounds[2]))
+
+        if start_item > end_item
+            error("Invalid item range: $text. Start must be <= end.")
+        end
+
+        return start_item:end_item
+    end
+
+    item_count = parse(Int, text)
+    item_count > 0 || error("Invalid number of items: $item_count")
+    return 1:item_count
+end
+
 
 function parse_cli_args(args)
     if isempty(args)
-        print_usage()
+        print_main_usage()
         exit()
     end
 
@@ -195,10 +256,44 @@ function parse_cli_args(args)
         return (mode = mode, input_path = args[2], output_path = args[3], minsup = parse(Float64, args[4]))
     elseif mode == "-b" && length(args) == 4
         return (mode = mode, output_file1 = args[2], output_file2 = args[3], output_path = args[4])
+    elseif mode == "-s" && 3 <= length(args) <= 6
+        ratios = length(args) >= 4 ? parse_subset_ratios(args[4]) : DEFAULT_SUBSET_RATIOS
+        seed = length(args) >= 5 ? parse(Int, args[5]) : DEFAULT_SUBSET_SEED
+        sampling = length(args) >= 6 ? lowercase(args[6]) : DEFAULT_SUBSET_SAMPLING
+
+        if !(sampling in ("independent", "prefix"))
+            println("Invalid sampling mode: $sampling")
+            println("Available sampling modes: independent, prefix")
+            exit()
+        end
+
+        return (mode = mode, input_path = args[2], output_path = args[3], ratios = ratios, seed = seed, sampling = sampling)
+    elseif mode == "-tl" && 2 <= length(args) <= 5
+        transaction_count = length(args) >= 3 ? parse(Int, args[3]) : DEFAULT_TRANSACTION_LENGTH_COUNT
+        item_range = length(args) >= 4 ? parse_transaction_item_range(args[4]) : DEFAULT_TRANSACTION_ITEM_RANGE
+        lengths = length(args) >= 5 ? parse_transaction_lengths(args[5]) : DEFAULT_TRANSACTION_LENGTHS
+
+        if transaction_count <= 0
+            println("Invalid number of transactions: $transaction_count")
+            exit()
+        end
+
+        if maximum(lengths) > length(item_range)
+            println("Maximum transaction length $(maximum(lengths)) exceeds available items $(length(item_range)) in range $(first(item_range)):$(last(item_range)).")
+            exit()
+        end
+
+        return (
+            mode = mode,
+            output_path = args[2],
+            transaction_count = transaction_count,
+            transaction_item_range = item_range,
+            transaction_lengths = lengths,
+        )
     end
 
     println("Invalid arguments.")
-    print_usage()
+    print_main_usage()
     exit()
 end
 
@@ -293,18 +388,21 @@ function print_output_comparison_summary(io::IO, comparison)
 end
 
 function print_comparison_summary(left::Dict{String,String}, right::Dict{String,String})
+    left_patterns = get(left, "patterns", get(left, "frequent itemsets", "n/a"))
+    right_patterns = get(right, "patterns", get(right, "frequent itemsets", "n/a"))
+
     println(repeat("=", 40))
     println("Comparison file: $(left["input_file"])")
     println("Minimum support: $(left["minsup"])")
     println("Algorithm 1: $(left["algorithm"])")
     println("  Transactions count from database : $(left["transactions"])")
     println("  Max memory usage: $(format_memory(parse(Int64, left["peak_working_set_bytes"])))")
-    println("  Frequent itemsets count : $(left["patterns"])")
+    println("  Frequent itemsets count : $left_patterns")
     println("  Total time ~ $(format_runtime_ms(parse(Int64, left["runtime_ns"]))) ms")
     println("Algorithm 2: $(right["algorithm"])")
     println("  Transactions count from database : $(right["transactions"])")
     println("  Max memory usage: $(format_memory(parse(Int64, right["peak_working_set_bytes"])))")
-    println("  Frequent itemsets count : $(right["patterns"])")
+    println("  Frequent itemsets count : $right_patterns")
     println("  Total time ~ $(format_runtime_ms(parse(Int64, right["runtime_ns"]))) ms")
     println(repeat("=", 40))
 end
@@ -314,17 +412,17 @@ function print_algorithm_summary(algorithm_name::String, stats, input_file::Stri
     println("Algorithm: $algorithm_name")
     println("file: $input_file")
     println("Transactions count from database : $(stats.transaction_count)")
-    if stats.peak_working_set_bytes > 0
-        println("Max memory usage: $(format_memory(stats.peak_working_set_bytes))")
-    else
-        println("Max memory usage: n/a")
-    end
     println("Frequent itemsets count : $(stats.frequent_itemset_count)")
     println("Total time ~ $(format_runtime_ms(stats.runtime_ns)) ms")
     println("Nodes: $(stats.node_count)")
     println("Trees: $(stats.tree_count)")
     println("Conditional trees: $(stats.conditional_tree_count)")
     println("Projections: $(stats.projection_count)")
+    if stats.peak_working_set_bytes > 0
+        println("Peak RAM (MB): $(format_memory_mb(stats.peak_working_set_bytes))")
+    else
+        println("Peak RAM (MB): n/a")
+    end
     println("Minimum support: $minsup")
     println(repeat("=", 40))
 end

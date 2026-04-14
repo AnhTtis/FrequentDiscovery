@@ -3,12 +3,24 @@ include("algorithm/utils.jl")
 include("algorithm/fpgrowth.jl")
 include("algorithm/projection_fpgrowth.jl")
 include("algorithm/adjacency_fpgrowth.jl")
+include("experiment/split_retail_subsets.jl")
+include("experiment/exp_transaction_length.jl")
 
 using .Structures
 using .Utils
 using .FPGrowth
 using .ProjectionFPGrowth
 using .AdjacencyFPGrowth
+using .RetailSubsetSplitter: split_database_subsets
+using .TransactionLengthExperiment: generate_transaction_length_datasets
+
+function script_path()
+    return abspath(@__FILE__)
+end
+
+function project_root()
+    return normpath(joinpath(@__DIR__, ".."))
+end
 
 function spawn_algorithm_process(algorithm_name::String, input_file::String, output_dir::String, minsup::Float64)
     cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, ".."))) $(abspath(@__FILE__)) -a $algorithm_name $input_file $output_dir $(string(minsup))`
@@ -78,5 +90,15 @@ elseif args.mode == "-ca"
         spawn_algorithm_process(algorithm, args.input_path, args.output_path, args.minsup)
     end
 elseif args.mode == "-b"
-    print_output_comparison_summary(compare_output_results(args.output_file1, args.output_file2, args.output_path))
+    comparison = compare_output_results(args.output_file1, args.output_file2, args.output_path)
+    print_output_comparison_summary(comparison)
+elseif args.mode == "-s"
+    split_database_subsets(args.input_path, args.output_path, args.ratios, args.seed, args.sampling)
+elseif args.mode == "-tl"
+    generate_transaction_length_datasets(
+        args.output_path,
+        args.transaction_count,
+        args.transaction_item_range,
+        args.transaction_lengths,
+    )
 end
